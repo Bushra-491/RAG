@@ -1,0 +1,71 @@
+from sentence_transformers import SentenceTransformer
+import numpy as np
+THRESHOLD = 0.4
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+chunks = ["An average adult human brain weighs about 3 pounds (1.35 kg)",
+          "About 60% of the brain is made of fat, making it the fattest organ in the human body",
+          "The brain is roughly 75% water, meaning even mild dehydration can quickly affect focus and memory",
+          "It contains approximately 86 billion neurons (nerve cells) that transmit information via electrical and chemical signals.",
+          "Although it accounts for only about 2% of the body's total weight, the brain uses 20% of the body's energy and oxygen supply.",
+          "While you are awake, your brain generates roughly 20 to 23 watts of electrical power—enough to illuminate a small lightbulb.",
+          "Nerve impulses can travel through pathways at speeds reaching up to 268 miles per hour (431 km/h)",
+          "The brain itself has no pain receptors and cannot feel pain, which is why brain surgery can be performed while a patient is awake.",
+          "The human brain continues to grow and mature well into young adulthood, with the prefrontal cortex (responsible for impulse control) finishing development around age 25.",
+          "The brain's data storage capacity is considered virtually unlimited, continuously forming new synaptic connections as you learn."]
+
+chunk_vectors = model.encode(chunks)
+
+def cosine_similarity(a, b):
+    return (np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b)))
+
+def retrieve(question, k=2):
+    question_vector = model.encode(question)
+    res = {}
+    similar = []
+    for i,chunk_vector in enumerate(chunk_vectors):
+        sim = cosine_similarity(question_vector, chunk_vector)
+        res[i] = sim
+    sorted_res = sorted(res.items(), key = lambda item: item[1], reverse = True)
+    for i,score in sorted_res[:k]:
+        if score > THRESHOLD:
+            similar.append(chunks[i])
+    return similar
+
+def test_retrieved(question, k=2):
+    question_vector = model.encode(question)
+    res = {}
+    similar = {}
+    for i,chunk_vector in enumerate(chunk_vectors):
+        sim = cosine_similarity(question_vector, chunk_vector)
+        res[i] = sim
+    sorted_res = sorted(res.items(), key = lambda item: item[1], reverse = True)
+    for i,score in sorted_res[:k]:
+        similar[score] = chunks[i]
+    return similar
+    
+
+
+print(retrieve("What is the capital of France?"))
+print(retrieve("How many hearts does an octopus have?"))
+print(retrieve("What is the brain’s favorite color?"))
+
+print(retrieve("How much energy does the brain use?"))
+print(retrieve("how much water is the brain made of?"))
+print(retrieve("pain receptors in the brain?"))
+
+print(retrieve("What keeps my thoughts sharp when I’m thirsty?"))
+
+def build_prompt(question, retrieved_chunks):
+    joined_chunks = "\n".join(retrieved_chunks)
+    prompt = f"Use only the information below to answer. If the answer is not there, say you don't know. \nInformation: {joined_chunks} \nQuestion: {question}."
+    return prompt
+
+
+question = "What is the capital of France?"
+found = retrieve(question)
+if not found:
+    print("I don't know, nothing relevant found.")
+else:
+    print(build_prompt(question, found))
